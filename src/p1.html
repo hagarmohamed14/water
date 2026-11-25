@@ -1,0 +1,204 @@
+<title>Water Tank Digital Twin</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: full-bleed 3D plant; slim glass HUD (top bar, left SCADA strip, right component panel); bottom dock opens one sheet. Single dark look by design. */
+:root{
+  --bg:#040b1a;--bg2:#071731;--panel:rgba(7,22,48,.68);--panel2:rgba(12,34,70,.72);
+  --line:rgba(88,196,255,.22);--line2:rgba(88,196,255,.45);
+  --cyan:#3ad7ff;--blue:#2f7dff;--text:#e2f4ff;--mute:#84a8c8;
+  --good:#36e08a;--warn:#ffbf3d;--crit:#ff4d5e;--sim:#b58bff;
+  --f-head:'Space Grotesk','Inter',system-ui,sans-serif;--f-body:'Inter',system-ui,sans-serif;--f-data:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:13px/1.45 var(--f-body);overflow:hidden;padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+#app{position:relative;width:100%;height:100%;overflow:hidden;background:radial-gradient(120% 90% at 50% 30%,#0a2150 0%,#050f26 55%,#030816 100%)}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.tag{position:absolute;transform:translate(-50%,-100%);padding:2px 8px;border-radius:999px;background:rgba(5,18,42,.78);border:1px solid var(--line2);font:500 11px var(--f-data);color:var(--text);white-space:nowrap;display:flex;gap:6px;align-items:center;transition:opacity .2s}
+.tag i{width:7px;height:7px;border-radius:50%;background:var(--mute);box-shadow:0 0 6px currentColor}
+.tag.good i{background:var(--good);color:var(--good)}.tag.bad i{background:var(--crit);color:var(--crit)}.tag.warn i{background:var(--warn);color:var(--warn)}.tag.off i{background:#506a86;color:#506a86}
+.tag.alm{border-color:var(--crit);color:#ffd7db}.tag.sel{border-color:var(--cyan);box-shadow:0 0 12px rgba(58,215,255,.55)}
+.glass{background:var(--panel);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);box-shadow:0 10px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.05)}
+h1,h2,h3{font-family:var(--f-head);margin:0;font-weight:600}
+.mono{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;background:rgba(40,110,200,.18);border:1px solid var(--line);border-radius:8px;padding:5px 10px;transition:background .15s,border-color .15s}
+button:hover{background:rgba(58,215,255,.18);border-color:var(--line2)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.on{background:rgba(58,215,255,.22);border-color:var(--cyan);color:#fff}
+button.danger{border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.14)}
+input,select{background:rgba(3,12,30,.7);border:1px solid var(--line);border-radius:7px;padding:5px 8px;min-width:0}
+select option{background:#071731}
+label.f{display:grid;gap:3px;color:var(--mute);font-size:11px}
+.top{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:calc(10px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));pointer-events:none}
+.top>*{pointer-events:auto}
+.brand{display:flex;gap:10px;align-items:center;padding:7px 14px 7px 10px}
+.brand svg{width:26px;height:26px;flex:none}
+.brand h1{font-size:15px;letter-spacing:.01em}.brand small{display:block;color:var(--mute);font-size:11px}
+.seg{display:flex;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:10px;font-weight:600;letter-spacing:.04em;font-size:12px}
+.seg button.on{background:rgba(58,215,255,.2);box-shadow:inset 0 0 0 1px var(--cyan)}
+.seg button[data-mode=sim].on{background:rgba(181,139,255,.22);box-shadow:inset 0 0 0 1px var(--sim)}
+.seg button[data-mode=offline].on{background:rgba(255,191,61,.18);box-shadow:inset 0 0 0 1px var(--warn)}
+.clock{display:flex;gap:12px;align-items:center;padding:8px 14px;font:500 12px var(--f-data)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mute);margin-right:6px;box-shadow:0 0 8px currentColor;color:var(--mute)}
+.dot.good{background:var(--good);color:var(--good)}.dot.bad{background:var(--crit);color:var(--crit)}.dot.warn{background:var(--warn);color:var(--warn)}.dot.sim{background:var(--sim);color:var(--sim)}
+.views{position:absolute;top:calc(64px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:4px;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px);z-index:2}
+.views button{border:0;background:transparent;padding:4px 9px;font-size:12px;color:var(--mute)}
+.views button:hover{color:var(--text)}
+.views .reset{color:var(--cyan)}
+#scada{position:absolute;left:max(12px,env(safe-area-inset-left,0px));top:calc(112px + env(safe-area-inset-top,0px));width:252px;padding:12px;display:grid;gap:10px;max-height:calc(100% - 200px);overflow:auto}
+#scada h3{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);font-weight:500}
+.lvl{display:grid;gap:6px}
+.lvl .big{font:600 34px/1 var(--f-head);letter-spacing:-.02em}.lvl .big small{font-size:16px;color:var(--mute);margin-left:2px}
+.bar{height:6px;border-radius:4px;background:rgba(80,160,255,.18);overflow:hidden}.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));width:0;transition:width .4s}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:baseline}.kv span:nth-child(odd){color:var(--mute)}
+.kv span:nth-child(even){text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.chip{padding:5px 6px;border-radius:8px;border:1px solid var(--line);text-align:center;font:500 11px var(--f-data);background:rgba(5,18,40,.5);cursor:pointer}
+.chip small{display:block;color:var(--mute);font-size:10px}
+.chip.good{border-color:rgba(54,224,138,.55);color:var(--good)}.chip.bad{border-color:rgba(255,77,94,.7);color:#ff9aa4}.chip.off{color:var(--mute)}.chip.warn{border-color:rgba(255,191,61,.6);color:var(--warn)}
+.sep{height:1px;background:var(--line)}
+#simctl{display:grid;gap:8px}
+#simctl[hidden]{display:none}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+input[type=range]{padding:0;width:100%;accent-color:var(--cyan)}
+#detail{position:absolute;right:max(12px,env(safe-area-inset-right,0px));top:calc(112px + env(safe-area-inset-top,0px));width:300px;padding:14px;display:grid;gap:10px;max-height:calc(100% - 200px);overflow:auto}
+#detail header{display:flex;justify-content:space-between;align-items:start;gap:8px}
+#detail h2{font-size:17px}.sub{color:var(--mute);font-size:11px}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font:500 11px var(--f-data);border:1px solid var(--line);color:var(--mute)}
+.pill.good{color:var(--good);border-color:rgba(54,224,138,.5)}.pill.bad{color:#ff9aa4;border-color:rgba(255,77,94,.6)}.pill.warn{color:var(--warn);border-color:rgba(255,191,61,.5)}.pill.sim{color:var(--sim);border-color:rgba(181,139,255,.55)}
+#banner{position:absolute;left:50%;transform:translateX(-50%);top:calc(104px + env(safe-area-inset-top,0px));z-index:3;padding:8px 16px;border-radius:999px;font-weight:600;font-size:12px;letter-spacing:.03em;white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis;background:rgba(40,25,0,.85);border:1px solid var(--warn);color:var(--warn)}
+#banner.sim{background:rgba(30,14,60,.8);border-color:var(--sim);color:#d6bfff}
+#banner.crit{background:rgba(50,6,12,.88);border-color:var(--crit);color:#ffb3bb}
+.views{z-index:2}
+.dock{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:4px;padding:5px;z-index:5}
+.dock button{border:0;background:transparent;padding:8px 14px;border-radius:10px;font-weight:500;position:relative}
+.dock button.on{background:rgba(58,215,255,.2);box-shadow:inset 0 0 0 1px var(--cyan)}
+.badge{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--crit);color:#fff;font:600 10px/18px var(--f-data);text-align:center;padding:0 4px}
+.badge[hidden]{display:none}
+#sheet{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(66px + env(safe-area-inset-bottom,0px));height:min(46vh,460px);display:grid;grid-template-rows:auto 1fr;z-index:4;overflow:hidden;background:rgba(5,16,38,.86)}
+#sheet[hidden]{display:none}
+.shead{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);gap:10px}
+.shead h2{font-size:15px}
+.sbody{overflow:auto;padding:12px 14px;min-height:0}
+.topo{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(250px,1fr);gap:14px;height:100%}
+.topo>div{min-width:0}
+.topo svg{width:100%;height:100%;min-height:200px;display:block}
+.nodeg{cursor:pointer}.nodeg rect{fill:rgba(10,32,68,.9);stroke:var(--line2);stroke-width:1.4;transition:stroke .2s}
+.nodeg:hover rect,.nodeg.sel rect{stroke:var(--cyan)}
+.nodeg text{fill:var(--text);font:500 12px var(--f-body);text-anchor:middle}.nodeg .s{fill:var(--mute);font:11px var(--f-data)}
+.link{stroke-width:3;fill:none;cursor:pointer}
+.linkhit{stroke:transparent;stroke-width:18;fill:none;cursor:pointer}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;color:var(--mute);font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:5px 8px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#071634}
+.tbl td{padding:5px 8px;border-bottom:1px solid rgba(88,196,255,.1);vertical-align:middle}
+.tbl td.n{font-family:var(--f-data);font-variant-numeric:tabular-nums;text-align:right}
+.tblwrap{overflow:auto;max-width:100%}
+.io{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.io h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px}
+.led{display:inline-block;width:10px;height:10px;border-radius:50%;background:#2a3d57;vertical-align:middle;margin-right:6px}
+.led.on{background:var(--good);box-shadow:0 0 8px var(--good)}.led.bad{background:var(--crit);box-shadow:0 0 8px var(--crit)}.led.amb{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.trends{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.trends figure{margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:rgba(4,14,34,.6)}
+.trends figcaption{display:flex;justify-content:space-between;color:var(--mute);font-size:11px;margin-bottom:4px}
+.trends canvas{width:100%;height:100px;display:block}
+.sev{font:600 10px var(--f-data);padding:1px 7px;border-radius:4px;letter-spacing:.06em}
+.sev.crit{background:rgba(255,77,94,.2);color:#ff9aa4}.sev.high{background:rgba(255,140,60,.2);color:#ffb27a}.sev.warn{background:rgba(255,191,61,.18);color:var(--warn)}
+tr.cleared td{opacity:.55}
+.cfg{display:grid;gap:8px}.cfg .two{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.err{color:#ff9aa4;font-size:11px;margin:0;padding-left:16px}
+.note{color:var(--mute);font-size:11px}
+#toasts{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(70px + env(safe-area-inset-bottom,0px));display:grid;gap:6px;z-index:6;pointer-events:none;width:min(320px,calc(100% - 24px))}
+.toast{padding:8px 12px;border-radius:10px;background:rgba(40,6,14,.92);border:1px solid var(--crit);font-size:12px;animation:in .25s}
+.toast.warn{background:rgba(40,28,4,.92);border-color:var(--warn)}
+@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#nogl{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px}
+#nogl[hidden]{display:none}
+.btoggle{display:none}
+@media (max-width:860px){
+  .views{top:calc(104px + env(safe-area-inset-top,0px))}
+  #banner{top:calc(148px + env(safe-area-inset-top,0px))}
+  #scada{top:calc(150px + env(safe-area-inset-top,0px));width:min(260px,calc(100% - 24px))}
+  #scada.min>:not(.btoggle){display:none}
+  .btoggle{display:block}
+  #detail{top:auto;right:12px;left:12px;width:auto;bottom:calc(66px + env(safe-area-inset-bottom,0px));max-height:42%}
+  #sheet{height:min(62vh,520px)}
+  .topo{grid-template-columns:1fr}
+  .topo svg{min-height:230px}
+  .clock span.hide{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+<div id="app">
+  <canvas id="gl" tabindex="0" aria-label="Interactive 3D water tank installation"></canvas>
+  <div id="labels"></div>
+  <div id="nogl" hidden><div><h2>3D view unavailable</h2><p class="note">This browser could not start WebGL. The SCADA panels still work from the dock below.</p></div></div>
+
+  <header class="top">
+    <div class="brand glass">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3C16 3 6 14 6 20a10 10 0 0020 0C26 14 16 3 16 3z" fill="none" stroke="#3ad7ff" stroke-width="2"/><path d="M10 21c2 2 4 2 6 0s4-2 6 0" fill="none" stroke="#2f7dff" stroke-width="2" stroke-linecap="round"/></svg>
+      <div><h1>Water Tank Digital Twin</h1><small id="srcline">Simulated data</small></div>
+    </div>
+    <div class="seg glass" role="group" aria-label="Operating mode">
+      <button data-mode="live" title="Show data received from connected industrial systems">LIVE</button>
+      <button data-mode="sim" class="on" title="Generated demo process data, never real readings">SIMULATION</button>
+      <button data-mode="offline" title="Freeze the last available data">OFFLINE</button>
+    </div>
+    <div class="clock glass"><span><i class="dot" id="hdot"></i><span id="hlabel">Simulated</span></span><span id="clk">--:--:--</span><span class="hide" id="dte"></span></div>
+  </header>
+
+  <div class="views glass" id="views" role="group" aria-label="Camera views"></div>
+  <div id="banner" hidden></div>
+
+  <aside id="scada" class="glass min-off" aria-label="Process summary">
+    <button class="btoggle" id="stoggle">Process summary</button>
+    <div class="lvl">
+      <h3>Water level</h3>
+      <div class="big mono"><span id="k-pct">--</span><small>%</small></div>
+      <div class="bar"><i id="k-bar"></i></div>
+    </div>
+    <div class="kv">
+      <span>Level</span><span id="k-m">--</span>
+      <span>Volume</span><span id="k-vol">--</span>
+      <span>Capacity</span><span>10,000 L</span>
+      <span>Inlet flow</span><span id="k-in">--</span>
+      <span>Outlet flow</span><span id="k-out">--</span>
+      <span>Water temp.</span><span id="k-t">--</span>
+    </div>
+    <div class="sep"></div>
+    <div><h3>Pumps</h3><div class="trio" id="k-pumps"></div></div>
+    <div><h3>Outlet valves</h3><div class="trio" id="k-valves"></div></div>
+    <div class="sep"></div>
+    <div class="kv">
+      <span>Sensor health</span><span id="k-sens">--</span>
+      <span>Comm health</span><span id="k-comm">--</span>
+      <span>Active alarms</span><span id="k-alm">0</span>
+    </div>
+    <div id="simctl" hidden>
+      <div class="sep"></div>
+      <h3>Simulation</h3>
+      <label class="f">Scenario<select id="s-scn"></select></label>
+      <div class="row"><button id="s-clear">Clear faults</button><button id="s-estop" class="danger">E-Stop</button></div>
+      <label class="f">Set water level <span class="mono" id="s-lvv"></span><input type="range" id="s-lvl" min="0" max="100" step="1"></label>
+      <label class="f">Time speed <span class="mono" id="s-spv"></span><input type="range" id="s-spd" min="1" max="30" step="1" value="6"></label>
+      <label class="row"><input type="checkbox" id="s-auto" checked> Automatic pump and valve control</label>
+    </div>
+  </aside>
+
+  <aside id="detail" class="glass" hidden></aside>
+
+  <nav class="dock glass" aria-label="Panels">
+    <button data-sheet="topo">Topology</button>
+    <button data-sheet="io">Field I/O</button>
+    <button data-sheet="alm">Alarms<span class="badge" id="abadge" hidden>0</span></button>
+    <button data-sheet="trend">Trends</button>
+  </nav>
+  <section id="sheet" class="glass" hidden><div class="shead"><h2 id="sh-title"></h2><div class="row" id="sh-tools"></div><button id="sh-close" aria-label="Close panel">Close</button></div><div class="sbody" id="sh-body"></div></section>
+  <div id="toasts" aria-live="polite"></div>
+</div>

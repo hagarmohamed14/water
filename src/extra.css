@@ -1,0 +1,42 @@
+h3.sm{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);font-weight:500;margin:8px 0 4px}
+textarea{background:rgba(3,12,30,.7);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font:11px/1.4 var(--f-data);color:var(--text);resize:vertical;width:100%;min-width:0}
+textarea:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+input[type=checkbox]{accent-color:var(--cyan)}
+.cfgg{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.dpgrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(240px,1fr);gap:18px}
+.dpgrid>*{min-width:0}
+.cfg h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan)}
+.lbl{font:600 11px var(--f-data);text-anchor:middle}
+.cap{fill:var(--mute);font:10px var(--f-body);text-anchor:start}
+.lnk{cursor:pointer}.lnk.sel .link{stroke-width:4.5}
+.link{stroke-width:3}
+.link.flow{animation:dash .9s linear infinite}
+@keyframes dash{to{stroke-dashoffset:13}}
+.alrow{padding:4px 0;border-bottom:1px solid rgba(88,196,255,.1)}
+#detail .kv{grid-template-columns:auto 1fr}
+.trio .f input{width:100%}
+#topo-side{overflow:auto;display:grid;gap:8px;align-content:start}
+#topo-side .cfg .two{grid-template-columns:2fr 1fr}
+.views{width:max-content}
+#app.sheet-open #scada,#app.sheet-open #detail{max-height:calc(100% - 190px - min(46vh,460px))}
+@media (max-width:860px){#app.sheet-open #scada,#app.sheet-open #detail{display:none}.views{width:auto}}
+@media (max-width:860px){.dpgrid{grid-template-columns:1fr}}
+.trends canvas{height:130px}
+@media (max-width:860px){
+  .brand small{display:none}.brand h1{font-size:13px}.brand{padding:6px 10px}
+  .clock #clk{display:none}.clock{padding:8px 10px}
+  .views{left:12px;right:12px;transform:none;max-width:none;width:auto;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;top:calc(116px + env(safe-area-inset-top,0px))}
+  .views button{white-space:nowrap;flex:none}
+  #banner{top:calc(158px + env(safe-area-inset-top,0px));font-size:11px}
+  #scada{top:calc(194px + env(safe-area-inset-top,0px))}
+  .dock button{white-space:nowrap;padding:8px 9px;font-size:12px}
+  #topo-svg{overflow-x:auto}.topo svg{min-width:640px;min-height:0;height:auto}
+  #detail{max-height:38%}
+}
+@media (max-width:860px){
+  .brand{order:1}.clock{order:2}.seg{order:3;flex:1 0 100%}.seg button{flex:1}
+  .top{gap:8px}
+  .views{top:calc(112px + env(safe-area-inset-top,0px))}
+  #banner{top:calc(154px + env(safe-area-inset-top,0px))}
+  #scada{top:calc(190px + env(safe-area-inset-top,0px))}
+}
